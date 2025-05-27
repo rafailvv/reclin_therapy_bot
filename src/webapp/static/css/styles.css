@@ -1,0 +1,106 @@
+/* static/css/styles.css */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f5f7fa;
+  font-family: 'Inter', sans-serif;
+}
+
+.container {
+  width: 100%;
+  max-width: 500px;
+  padding: 16px;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+}
+
+h2 {
+  margin: 0 0 24px;
+  font-size: 1.8rem;
+  text-align: center;
+  color: #333333;
+}
+
+input[type="text"],
+input[type="email"] {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  font-size: 1.1rem;
+}
+
+/* Увеличенные чекбоксы */
+.checkbox input {
+  width: 20px;      /* увеличенная ширина */
+  height: 20px;     /* увеличенная высота */
+  margin-right: 10px;
+  margin-top: 3px;
+}
+
+.checkbox-group {
+  margin-bottom: 24px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.checkbox span {
+  font-size: 1rem;
+  color: #555555;
+  line-height: 1.4;
+}
+
+.checkbox a {
+  color: #14c2e6;
+  text-decoration: none;
+}
+
+.checkbox a:hover {
+  text-decoration: underline;
+}
+
+button {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #14c2e6;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+button:disabled {
+  background: #a1dbe8;
+  cursor: not-allowed;
+}
+
+button:not(:disabled):hover {
+  background: #0fa9cd;
+}
+
+.tick{
+margin-bottom: -40px;
+margin-top: -100px;
+}

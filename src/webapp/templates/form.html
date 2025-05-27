@@ -1,0 +1,76 @@
+<!-- templates/form.html -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Регистрация</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2>Регистрация в чате</h2>
+      <form id="regForm">
+        <input type="text" name="fio" placeholder="ФИО" required>
+        <input type="text" name="specialization" placeholder="Специализация" required>
+        <input type="email" name="email" placeholder="E-mail" required>
+
+        <div class="checkbox-group">
+          <label class="checkbox">
+            <input type="checkbox" id="privacy">
+            <span>Я согласен с <a href="{{ url_for('static', path='privacy_policy.pdf') }}" target="_blank">политикой конфиденциальности</a></span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="rules">
+            <span>Я прочитал <a href="{{ url_for('static', path='chat_rules.pdf') }}" target="_blank">правила чата</a></span>
+          </label>
+        </div>
+
+        <button type="submit" id="nextBtn" disabled>Далее</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    const form = document.getElementById('regForm');
+    const next = document.getElementById('nextBtn');
+    const boxes = Array.from(document.querySelectorAll('input[type=checkbox]'));
+
+    function validate() {
+      const filled = [...form.elements].filter(e => e.required).every(e => e.value.trim());
+      const checked = boxes.every(b => b.checked);
+      next.disabled = !(filled && checked);
+    }
+
+    form.addEventListener('input', validate);
+    boxes.forEach(b => b.addEventListener('change', validate));
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      next.disabled = true;
+
+      const payload = {
+        telegram_id: tg.initDataUnsafe.user.id,
+        username: tg.initDataUnsafe.user.username,
+        fio: form.fio.value.trim(),
+        specialization: form.specialization.value.trim(),
+        email: form.email.value.trim()
+      };
+
+      const r = await fetch('/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const res = await r.json();
+      tg.openTelegramLink(res.link);
+      tg.close();
+    });
+  </script>
+</body>
+</html>

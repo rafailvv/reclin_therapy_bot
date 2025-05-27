@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Готово!</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body class="wrapper">
+  <div class="success-card">
+    <div class="icon-circle">
+      <svg class="tick" viewBox="0 0 52 52">
+        <path d="M14 27 l10 10 l14 -14" fill="none" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <p class="message">Вы уже зарегистрированы!</p>
+    <button class="btn" onclick="openChat()">Перейти в чат</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    function openChat() {
+      const inviteLink = "{{ invite_link }}";
+      Telegram.WebApp.openTelegramLink(inviteLink);
+      tg.close();
+    }
+  </script>
+</body>
+</html>
