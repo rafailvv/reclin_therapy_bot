@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 
 from aiogram import Router, F, types
 from aiogram.exceptions import TelegramAPIError
@@ -147,7 +148,28 @@ async def cmd_export(msg: Message):
     ]
 
     df = pd.DataFrame(data)
-
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"users_{timestamp}.xlsx"
     with tempfile.NamedTemporaryFile("wb", suffix=".xlsx", delete=False) as fp:
         df.to_excel(fp.name, index=False)
-        await msg.answer_document(FSInputFile(fp.name, filename="users.xlsx"))
+        await msg.answer_document(
+            FSInputFile(fp.name),
+            filename=filename,
+            caption=f"Отчёт сформирован: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        )
+
+@router.message(Command("info"))
+async def cmd_info(msg: Message):
+    """
+    Выдаёт краткий список доступных команд и их назначение.
+    """
+    if not is_admin(msg):
+        return
+
+    text = (
+        "<b>Доступные команды:</b>\n"
+        "/broadcast — запустить рассылку. После команды пришлите текст или медиа.\n"
+        "/export — экспорт списка пользователей в Excel.\n"
+        "/info — показать это справочное сообщение.\n"
+    )
+    await msg.answer(text, parse_mode="HTML")
