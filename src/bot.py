@@ -9,7 +9,7 @@ from aiogram.enums.parse_mode import ParseMode
 from src.config    import settings
 from src.handlers  import start, admin
 from src.db        import engine, Base
-from src.import_users import import_users_from_excel
+# from src.import_users import import_users_from_excel
 from src.scheduler import setup_scheduler
 
 async def main():
