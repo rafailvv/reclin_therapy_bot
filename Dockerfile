@@ -6,7 +6,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY tmp59q9jhov.xlsx .
+# COPY tmp59q9jhov.xlsx .
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
