@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from aiogram import Bot
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ..config import settings
 from ..db import async_session
@@ -39,50 +40,69 @@ def get_telegram_user_id(request: Request) -> int:
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, uid: int = Depends(get_telegram_user_id)):
     logger.info("Handling index GET for user %s", uid)
+
     async with async_session() as sess:
-        user = await sess.scalar(select(User).where(User.telegram_id == uid))
-    if user:
-        logger.info("User %s found; returning success template", uid)
-        return templates.TemplateResponse(
-            "success.html", {"request": request, "invite_link": user.invite_link}
+        user = await sess.scalar(
+            select(User).where(User.telegram_id == uid)
         )
-    logger.info("User %s not found; returning registration form", uid)
-    return templates.TemplateResponse("form.html", {"request": request})
+
+    # Если пользователя нет или он не заполнил fio или specialization — показываем форму
+    if not user or user.fio is None or user.specialization is None:
+        logger.info(
+            "User %s incomplete (%s); returning registration form",
+            uid,
+            f"fio={user.fio!r}, specialization={user.specialization!r}" if user else "no user",
+        )
+        return templates.TemplateResponse(
+            "form.html",
+            {"request": request}
+        )
+
+    # Иначе — показываем страницу успеха с invite_link
+    logger.info("User %s fully registered; returning success template", uid)
+    return templates.TemplateResponse(
+        "success.html",
+        {
+            "request": request,
+            "invite_link": user.invite_link
+        }
+    )
 
 
 @app.post("/register")
 async def register(request: Request):
-    logger.info("Registration attempt")
-    try:
-        data = await request.json()
-        tg_id = int(data.get("telegram_id", 0))
-        logger.debug("Parsed registration data for user %s: %s", tg_id, data)
-    except Exception as e:
-        logger.error("Error parsing registration JSON: %s", e)
-        raise HTTPException(400, "Invalid request payload")
+    data = await request.json()
+    tg_id = int(data.get("telegram_id", 0))
+    if tg_id == 0:
+        raise HTTPException(400, "telegram_id is required")
 
+    await bot.unban_chat_member(chat_id=settings.chat_id, user_id=tg_id)
+
+    # 1) Создаём новую одноразовую ссылку
+    invite = await create_one_time_invite(bot)
+
+    # 2) UPSERT: вставляем или обновляем все поля, включая новую invite_link
+    stmt = pg_insert(User).values(
+        telegram_id      = tg_id,
+        username         = data.get("username"),
+        fio              = data.get("fio"),
+        specialization   = data.get("specialization"),
+        email            = data.get("email"),
+        invite_link      = invite,
+    ).on_conflict_do_update(
+        index_elements=[User.telegram_id],
+        set_ = {
+            "fio"            : data.get("fio"),
+            "specialization" : data.get("specialization"),
+            "email"          : data.get("email"),
+            "invite_link"    : invite,
+        }
+    ).returning(User.invite_link)
+
+    # 3) Выполняем запрос и возвращаем новую ссылку
     async with async_session() as sess:
-        user_db = await sess.scalar(select(User).where(User.telegram_id == tg_id))
-        if user_db:
-            logger.info("User %s already registered; returning existing invite link", tg_id)
-            return {"link": user_db.invite_link}
+        result     = await sess.execute(stmt)
+        new_link   = result.scalar_one()
+        await sess.commit()
 
-        logger.info("Creating one-time invite for new user %s", tg_id)
-        invite = await create_one_time_invite(bot)
-        new_user = User(
-            telegram_id=tg_id,
-            username=data.get("username"),
-            fio=data.get("fio"),
-            specialization=data.get("specialization"),
-            email=data.get("email"),
-            invite_link=invite,
-        )
-        sess.add(new_user)
-        try:
-            await sess.commit()
-            logger.info("New user %s registered successfully", tg_id)
-        except Exception as e:
-            logger.error("Database commit failed for user %s: %s", tg_id, e)
-            raise HTTPException(500, "Internal server error")
-
-    return {"link": invite}
+    return {"link": new_link}

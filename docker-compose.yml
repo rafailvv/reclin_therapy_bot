@@ -1,3 +1,4 @@
+version: "3.9"
 services:
   db:
     image: postgres:16-alpine
@@ -5,26 +6,28 @@ services:
     env_file: .env
     volumes:
       - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"    # expose container 5432 to host 5435
 
   bot:
     build: .
     restart: unless-stopped
     env_file: .env
-    command: python -m src.bot
     depends_on:
       - db
+    # no need to map 5435 here—the bot is a client, not a server
 
   web:
     build: .
     restart: unless-stopped
     env_file: .env
+    depends_on:
+      - db
     command: >
       uvicorn src.webapp.main:app
         --host 0.0.0.0
         --port 8000
         --proxy-headers
-    depends_on:
-      - db
     ports:
       - "8000:8000"
 

@@ -15,7 +15,7 @@
       <form id="regForm">
         <input type="text" name="fio" placeholder="ФИО" required>
         <input type="text" name="specialization" placeholder="Специализация" required>
-        <input type="email" name="email" placeholder="E-mail" required>
+<!--        <input type="email" name="email" placeholder="E-mail" required>-->
 
         <div class="checkbox-group">
           <label class="checkbox">
@@ -59,7 +59,7 @@
         username: tg.initDataUnsafe.user.username,
         fio: form.fio.value.trim(),
         specialization: form.specialization.value.trim(),
-        email: form.email.value.trim()
+        // email: form.email.value.trim()
       };
 
       const r = await fetch('/register', {
