@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import update, select
 from sqlalchemy.exc import IntegrityError
 from ..config import settings
@@ -79,10 +80,9 @@ async def cmd_start(msg: Message):
             run_date = datetime.utcnow() + timedelta(days=5)
             scheduler.add_job(
                 func=cleanup_unregistered,
-                trigger="date",
-                run_date=run_date,
+                trigger=IntervalTrigger(days=5, start_date=run_date),
                 args=[msg.from_user.id],
-                id=f"cleanup_{msg.from_user.id}",
+                id=f"remind_spec_{msg.from_user.id}",
                 replace_existing=True,
             )
 

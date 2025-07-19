@@ -1,69 +1,91 @@
 # src/bot/scheduler.py
 import logging
+from datetime import timedelta, datetime
 
 from aiogram.types import InlineKeyboardMarkup, WebAppInfo, InlineKeyboardButton
+from apscheduler.jobstores.base import JobLookupError
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select, update
 from src.db import async_session
 from src.models import User
 from src.config import settings
-
-scheduler = AsyncIOScheduler()
-
-
 from aiogram.exceptions import TelegramBadRequest
+
+
+scheduler = AsyncIOScheduler(jobstores={
+    'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
+})
+
+async def reschedule_reminders_on_start():
+    async with async_session() as sess:
+        result = await sess.execute(
+            select(User).where(User.specialization == None)
+        )
+        users = result.scalars().all()
+
+        for user in users:
+            try:
+                run_date = user.registered_at + timedelta(days=5)
+                scheduler.add_job(
+                    func=cleanup_unregistered,
+                    trigger=IntervalTrigger(days=5, start_date=run_date),
+                    args=[user.telegram_id],
+                    id=f"remind_spec_{user.telegram_id}",
+                    replace_existing=True,
+                )
+            except Exception as e:
+                logging.warning(f"Не удалось пересоздать задачу для {user.telegram_id}: {e}")
+
 
 async def cleanup_unregistered(telegram_id: int):
     """
-    Runs 5 days after /start:
-     - if fio or specialization still null → kick (ban + unban) & DM with a WebApp button
-     - only if the user is still in chat
+    Runs every 5 days starting 5 days after /start:
+     - if specialization still null → DM reminder
+     - otherwise → remove this job (no more reminders)
     """
     async with async_session() as sess:
-        user = await sess.scalar(select(User).where(User.telegram_id == telegram_id))
+        user = await sess.scalar(
+            select(User).where(User.telegram_id == telegram_id)
+        )
         if not user:
             return
 
-        if not user.fio or not user.specialization:
-            bot = Bot(token=settings.bot_token)
-
+        if user.specialization:
             try:
-                # Проверяем, состоит ли пользователь в чате
-                member = await bot.get_chat_member(chat_id=settings.chat_id, user_id=telegram_id)
-                if member.status in ("left", "kicked"):
-                    return  # Уже не в чате — ничего не делаем
+                scheduler.remove_job(f"remind_spec_{telegram_id}")
+            except JobLookupError:
+                pass
+            return
 
-                # Кикаем: ban → unban
-                await bot.ban_chat_member(chat_id=settings.chat_id, user_id=telegram_id)
-
-                # Кнопка WebApp для повторного входа
-                kb = InlineKeyboardMarkup(
-                    inline_keyboard=[[
-                        InlineKeyboardButton(
-                            text="Заполнить данные",
-                            web_app=WebAppInfo(
-                                url=f"{settings.webapp_url}/?uid={telegram_id}"
-                            )
+        # Otherwise, send the *reminder* message
+        bot = Bot(token=settings.bot_token)
+        try:
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="Заполнить специальность",
+                        web_app=WebAppInfo(
+                            url=f"{settings.webapp_url}/?uid={telegram_id}"
                         )
-                    ]]
-                )
-
-                await bot.send_message(
-                    chat_id=telegram_id,
-                    text=(
-                        "Вы были исключены из сообщества Терапия|Reclin. Чтобы подключиться повторно к сообществу, "
-                        "заполните данные о вашем ФИО и специализации, нажав на кнопку ниже 👇"
-                    ),
-                    reply_markup=kb
-                )
-
-            except TelegramBadRequest as e:
-                # Например, если пользователь запретил личку — игнорируем
-                logging.warning(f"Failed to send message or kick user {telegram_id}: {e}")
-
-            finally:
-                await bot.session.close()
+                    )
+                ]]
+            )
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=(
+                    "Коллега, просим тебя внести специальность — "
+                    "это нужно, чтобы мы с командой подбирали материалы, "
+                    "которые действительно будут полезны именно тебе."
+                ),
+                reply_markup=kb
+            )
+        except TelegramBadRequest as e:
+            logging.warning(f"Failed to send reminder to {telegram_id}: {e}")
+        finally:
+            await bot.session.close()
 
 
 def setup_scheduler(bot: Bot):
