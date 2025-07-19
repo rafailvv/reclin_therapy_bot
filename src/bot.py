@@ -10,7 +10,8 @@ from src.config    import settings
 from src.handlers  import start, admin
 from src.db        import engine, Base
 # from src.import_users import import_users_from_excel
-from src.scheduler import setup_scheduler
+from src.scheduler import setup_scheduler, reschedule_reminders_on_start
+
 
 async def main():
     # await import_users_from_excel("tmp59q9jhov.xlsx")
@@ -29,6 +30,7 @@ async def main():
 
         # now hook up APScheduler → inside this call you must do scheduler.start()
         setup_scheduler(bot)
+        await reschedule_reminders_on_start()
 
     dp.startup.register(on_startup)
 
