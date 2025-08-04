@@ -17,3 +17,18 @@ class User(Base):
     )
 
 
+class BotMessage(Base):
+    __tablename__ = "bot_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    message_type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'welcome' или 'gift'
+    message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # ID сообщения в Telegram
+    from_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # ID чата-источника
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, default=dt.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow, nullable=False
+    )
+
+
