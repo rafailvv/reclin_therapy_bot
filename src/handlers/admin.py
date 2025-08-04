@@ -9,12 +9,12 @@ from aiogram.filters import StateFilter, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ..config import settings
 from ..services.broadcast import broadcast
 from ..db import async_session
-from ..models import User
+from ..models import User, BotMessage
 import pandas as pd
 import tempfile
 
@@ -38,6 +38,11 @@ def is_admin(msg: types.Message) -> bool:
 
 class BroadcastStates(StatesGroup):
     waiting_for_message = State()
+
+
+class EditMessageStates(StatesGroup):
+    waiting_for_welcome_message = State()
+    waiting_for_gift_message = State()
 
 
 @router.message(Command("broadcast"))
@@ -164,6 +169,117 @@ async def process_media_group_later(group_id: str, state: FSMContext, msg: types
     await state.clear()
 
 
+@router.message(Command("edit_welcome"))
+async def start_edit_welcome(msg: Message, state: FSMContext):
+    """Начинает процесс редактирования приветственного сообщения"""
+    if not is_admin(msg):
+        return
+
+    logger.info("Admin %s started editing welcome message", msg.from_user.id)
+    await state.clear()
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")]]
+    )
+    await msg.answer("Пришлите новое приветственное сообщение:", reply_markup=kb)
+    await state.set_state(EditMessageStates.waiting_for_welcome_message)
+
+
+@router.message(Command("edit_gift"))
+async def start_edit_gift(msg: Message, state: FSMContext):
+    """Начинает процесс редактирования сообщения с подарком"""
+    if not is_admin(msg):
+        return
+
+    logger.info("Admin %s started editing gift message", msg.from_user.id)
+    await state.clear()
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")]]
+    )
+    await msg.answer("Пришлите новое сообщение с подарком:", reply_markup=kb)
+    await state.set_state(EditMessageStates.waiting_for_gift_message)
+
+
+@router.callback_query(F.data == "edit_cancel")
+async def cancel_edit(cb: CallbackQuery, state: FSMContext):
+    logger.info("Message editing cancelled by admin %s", cb.from_user.id)
+    await state.clear()
+    await cb.message.edit_text("Редактирование отменено.")
+    await cb.answer()
+
+
+@router.message(EditMessageStates.waiting_for_welcome_message)
+async def save_welcome_message(msg: Message, state: FSMContext):
+    """Сохраняет message_id приветственного сообщения"""
+    if not is_admin(msg):
+        return
+
+    async with async_session() as sess:
+        # Ищем существующее сообщение
+        existing_msg = await sess.scalar(
+            select(BotMessage).where(BotMessage.message_type == "welcome")
+        )
+        
+        if existing_msg:
+            # Обновляем существующее
+            existing_msg.message_id = msg.message_id
+            existing_msg.from_chat_id = msg.chat.id
+            existing_msg.updated_at = datetime.utcnow()
+        else:
+            # Создаем новое
+            new_msg = BotMessage(
+                message_type="welcome",
+                message_id=msg.message_id,
+                from_chat_id=msg.chat.id,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            sess.add(new_msg)
+        
+        await sess.commit()
+
+    await state.clear()
+    await msg.answer("✅ Приветственное сообщение успешно сохранено!")
+    logger.info("Welcome message saved by admin %s (message_id: %s, chat_id: %s)", msg.from_user.id, msg.message_id, msg.chat.id)
+
+
+@router.message(EditMessageStates.waiting_for_gift_message)
+async def save_gift_message(msg: Message, state: FSMContext):
+    """Сохраняет message_id сообщения с подарком"""
+    if not is_admin(msg):
+        return
+
+    async with async_session() as sess:
+        # Ищем существующее сообщение
+        existing_msg = await sess.scalar(
+            select(BotMessage).where(BotMessage.message_type == "gift")
+        )
+        
+        if existing_msg:
+            # Обновляем существующее
+            existing_msg.message_id = msg.message_id
+            existing_msg.from_chat_id = msg.chat.id
+            existing_msg.updated_at = datetime.utcnow()
+        else:
+            # Создаем новое
+            new_msg = BotMessage(
+                message_type="gift",
+                message_id=msg.message_id,
+                from_chat_id=msg.chat.id,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            sess.add(new_msg)
+        
+        await sess.commit()
+
+    await state.clear()
+    await msg.answer("✅ Сообщение с подарком успешно сохранено!")
+    logger.info("Gift message saved by admin %s (message_id: %s, chat_id: %s)", msg.from_user.id, msg.message_id, msg.chat.id)
+
+
+
+
+
 @router.message(F.text == "/export")
 async def cmd_export(msg: Message):
     if not is_admin(msg):
@@ -214,6 +330,8 @@ async def cmd_info(msg: Message):
         "<b>Доступные команды:</b>\n"
         "/broadcast — запустить рассылку. После команды пришлите текст или медиа.\n"
         "/export — экспорт списка пользователей в Excel.\n"
+        "/edit_welcome — установить приветственное сообщение.\n"
+        "/edit_gift — установить сообщение с подарком.\n"
     )
     await msg.answer(text, parse_mode="HTML")
     logger.info("Sent command list to admin %s", msg.from_user.id)

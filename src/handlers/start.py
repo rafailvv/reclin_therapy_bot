@@ -9,12 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..services.invite import create_one_time_invite
 from ..db import async_session
-from ..models import User
+from ..models import User, BotMessage
 from ..scheduler import scheduler, cleanup_unregistered  # see next section
 
 router = Router()
 
-WELCOME_TEXT = (
+# Стандартные сообщения (используются если нет сохраненных в БД)
+DEFAULT_WELCOME_TEXT = (
     "🩺 <b>Как пользоваться чатом по терапии</b>\n"
     "Добро пожаловать!\n"
     "Вы находитесь в профессиональном чате для врачей и ординаторов терапевтических специальностей. "
@@ -26,7 +27,7 @@ WELCOME_TEXT = (
     "🔧 По техническим вопросам: @reclin2022"
 )
 
-GIFT_TEXT = (
+DEFAULT_GIFT_TEXT = (
     "🎁 <b>Хотим сразу поделиться с тобой стартовым набором полезных материалов:</b>\n"
     "📌 Памятка «под стекло» по артериальной гипертензии — <a href='https://disk.yandex.ru/d/aCHhf7g7i_KHgw'>Скачать</a>\n"
     "📌 Памятки «под стекло» по диарее и запору — <a href='https://disk.yandex.ru/d/Qf_sd_zUepxUPw'>Скачать</a>\n"
@@ -35,9 +36,62 @@ GIFT_TEXT = (
     "💬 Больше полезных материалов тебя ждёт в нашем чате — оставайся с нами!"
 )
 
+
+async def copy_message_by_id(bot, chat_id: int, message_id: int, from_chat_id: int, reply_markup=None) -> bool:
+    """Копирует сообщение по его ID из указанного чата"""
+    try:
+        await bot.copy_message(
+            chat_id=chat_id,
+            from_chat_id=from_chat_id,  # Копируем из сохраненного чата
+            message_id=message_id,
+            reply_markup=reply_markup
+        )
+        return True
+    except Exception as e:
+        logging.error(f"Failed to copy message {message_id} from chat {from_chat_id}: {e}")
+        return False
+
+
+async def send_welcome_message(bot, chat_id: int, reply_markup=None) -> bool:
+    """Отправляет приветственное сообщение"""
+    async with async_session() as sess:
+        welcome_msg = await sess.scalar(
+            select(BotMessage).where(BotMessage.message_type == "welcome")
+        )
+        
+        if welcome_msg:
+            # Пытаемся скопировать сохраненное сообщение
+            success = await copy_message_by_id(bot, chat_id, welcome_msg.message_id, welcome_msg.from_chat_id, reply_markup=reply_markup)
+            if success:
+                return True
+        
+        # Если копирование не удалось, отправляем стандартное сообщение
+        await bot.send_message(chat_id, DEFAULT_WELCOME_TEXT, reply_markup=reply_markup, parse_mode="HTML")
+        return True
+
+
+async def send_gift_message(bot, chat_id: int, reply_markup=None) -> bool:
+    """Отправляет сообщение с подарком"""
+    async with async_session() as sess:
+        gift_msg = await sess.scalar(
+            select(BotMessage).where(BotMessage.message_type == "gift")
+        )
+        
+        if gift_msg:
+            # Пытаемся скопировать сохраненное сообщение
+            success = await copy_message_by_id(bot, chat_id, gift_msg.message_id, gift_msg.from_chat_id, reply_markup=reply_markup)
+            if success:
+                return True
+        
+        # Если копирование не удалось или нет сохраненного сообщения - отправляем стандартное с кнопками
+        await bot.send_message(chat_id, DEFAULT_GIFT_TEXT, reply_markup=reply_markup, parse_mode="HTML")
+        return True
+
+
 @router.message(F.text == "/start")
 async def cmd_start(msg: Message):
-    await msg.answer(WELCOME_TEXT)
+    # Отправляем приветственное сообщение
+    await send_welcome_message(msg.bot, msg.chat.id)
 
     # 1) Создаём новую одноразовую ссылку
     invite_link = await create_one_time_invite(msg.bot)
@@ -63,7 +117,9 @@ async def cmd_start(msg: Message):
                 web_app=WebAppInfo(url=f"{settings.webapp_url}/?uid={msg.from_user.id}")
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[[button]])
-            await msg.answer(GIFT_TEXT, reply_markup=kb)
+            
+            # Отправляем сообщение с подарком
+            await send_gift_message(msg.bot, msg.chat.id, reply_markup=kb)
 
         else:
             # — впервые: создаём «заглушку»
@@ -93,5 +149,5 @@ async def cmd_start(msg: Message):
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[[button]])
 
-            # 5) Отправляем GIFT_TEXT с клавиатурой
-            await msg.answer(GIFT_TEXT, reply_markup=kb)
+            # 5) Отправляем сообщение с подарком
+            await send_gift_message(msg.bot, msg.chat.id, reply_markup=kb)
