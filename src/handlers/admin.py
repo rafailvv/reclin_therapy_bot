@@ -1,6 +1,9 @@
 import asyncio
 import json
 import logging
+import subprocess
+import tempfile
+import os
 from datetime import datetime
 
 from aiogram import Router, F, types
@@ -10,6 +13,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from ..config import settings
 from ..services.broadcast import broadcast
@@ -43,6 +47,120 @@ class BroadcastStates(StatesGroup):
 class EditMessageStates(StatesGroup):
     waiting_for_welcome_message = State()
     waiting_for_gift_message = State()
+
+
+@router.message(Command("backup"))
+async def cmd_backup(msg: Message):
+    """Создает бэкап базы данных"""
+    if not is_admin(msg):
+        return
+
+    logger.info("Admin %s requested database backup", msg.from_user.id)
+    
+    try:
+        # Проверяем наличие pg_dump
+        pg_dump_check = subprocess.run(['which', 'pg_dump'], capture_output=True, text=True)
+        if pg_dump_check.returncode != 0:
+            await msg.answer("❌ pg_dump не найден. Убедитесь, что PostgreSQL клиент установлен.")
+            logger.error("pg_dump not found")
+            return
+        
+        # Проверяем версию pg_dump
+        version_check = subprocess.run(['pg_dump', '--version'], capture_output=True, text=True)
+        if version_check.returncode == 0:
+            logger.info(f"pg_dump version: {version_check.stdout.strip()}")
+        else:
+            logger.warning("Could not get pg_dump version")
+        
+        # Создаем временный файл для бэкапа
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"backup_{timestamp}.sql"
+        
+        # Команда для создания бэкапа PostgreSQL
+        # Извлекаем параметры подключения из DATABASE_URL
+        db_url = str(settings.database_url)
+        logger.info(f"Database URL: {db_url}")
+        
+        # Парсим URL для получения параметров
+        if db_url.startswith('postgresql://') or db_url.startswith('postgresql+asyncpg://'):
+            # Убираем префикс postgresql:// или postgresql+asyncpg://
+            url_without_prefix = db_url.replace('postgresql+asyncpg://', '').replace('postgresql://', '')
+            
+            # Разделяем на auth и host части
+            if '@' in url_without_prefix:
+                auth_part, host_part = url_without_prefix.split('@', 1)
+            else:
+                # Если нет @, значит нет пароля
+                auth_part = url_without_prefix
+                host_part = url_without_prefix
+            
+            # Парсим auth часть
+            if ':' in auth_part:
+                username, password = auth_part.split(':', 1)
+            else:
+                username = auth_part
+                password = ""
+            
+            # Парсим host часть
+            if '/' in host_part:
+                host_port, database = host_part.rsplit('/', 1)
+            else:
+                host_port = host_part
+                database = "postgres"
+            
+            # Парсим host и port
+            if ':' in host_port:
+                host, port = host_port.split(':', 1)
+            else:
+                host = host_port
+                port = "5432"
+            
+            logger.info(f"Parsed DB params: host={host}, port={port}, user={username}, db={database}")
+            
+            # Создаем бэкап
+            backup_cmd = [
+                'pg_dump',
+                f'--host={host}',
+                f'--port={port}',
+                f'--username={username}',
+                f'--dbname={database}',
+                '--no-password',
+                '--format=custom',
+                '--file=' + backup_filename
+            ]
+            
+            # Устанавливаем переменную окружения для пароля
+            env = os.environ.copy()
+            if password:
+                env['PGPASSWORD'] = password
+            
+            logger.info(f"Running backup command: {' '.join(backup_cmd)}")
+            
+            result = subprocess.run(
+                backup_cmd,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                # Отправляем файл бэкапа
+                await msg.answer_document(
+                    FSInputFile(backup_filename),
+                    filename=backup_filename,
+                    caption=f"✅ Бэкап базы данных создан: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+                )
+                logger.info("Database backup created successfully by admin %s", msg.from_user.id)
+            else:
+                error_msg = f"❌ Ошибка создания бэкапа:\n{result.stderr}\n\nКоманда: {' '.join(backup_cmd)}"
+                await msg.answer(error_msg)
+                logger.error("Backup failed: %s", result.stderr)
+        else:
+            await msg.answer(f"❌ Неподдерживаемый тип базы данных: {db_url[:20]}...")
+            
+    except Exception as e:
+        await msg.answer(f"❌ Ошибка при создании бэкапа: {str(e)}")
+        logger.error("Backup error: %s", str(e))
 
 
 @router.message(Command("broadcast"))
@@ -275,9 +393,6 @@ async def save_gift_message(msg: Message, state: FSMContext):
     await state.clear()
     await msg.answer("✅ Сообщение с подарком успешно сохранено!")
     logger.info("Gift message saved by admin %s (message_id: %s, chat_id: %s)", msg.from_user.id, msg.message_id, msg.chat.id)
-
-
-
 
 
 @router.message(F.text == "/export")
