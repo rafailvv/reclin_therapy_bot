@@ -148,7 +148,7 @@
         // email: form.email.value.trim()
       };
 
-      const r = await fetch('/register', {
+      const r = await fetch('/pediatrics/register', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
