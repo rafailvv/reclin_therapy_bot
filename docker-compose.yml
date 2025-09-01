@@ -1,35 +1,45 @@
-version: "3.9"
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-reclin_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     env_file: .env
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5435:5432"    # expose container 5432 to host 5435
+      - "${POSTGRES_PORT:-5433}:5432"
 
   bot:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       - db
-    # no need to map 5435 here—the bot is a client, not a server
 
   web:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       - db
     command: >
       uvicorn src.webapp.main:app
         --host 0.0.0.0
-        --port 8000
+        --port ${WEBAPP_PORT:-8000}
         --proxy-headers
     ports:
-      - "8000:8000"
+      - "${WEBAPP_PORT:-8000}:${WEBAPP_PORT:-8000}"
 
 volumes:
   pgdata:

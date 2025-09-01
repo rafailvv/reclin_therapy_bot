@@ -15,26 +15,9 @@ from ..scheduler import scheduler, cleanup_unregistered  # see next section
 router = Router()
 
 # Стандартные сообщения (используются если нет сохраненных в БД)
-DEFAULT_WELCOME_TEXT = (
-    "🩺 <b>Как пользоваться чатом по терапии</b>\n"
-    "Добро пожаловать!\n"
-    "Вы находитесь в профессиональном чате для врачей и ординаторов терапевтических специальностей. "
-    "Здесь можно задавать вопросы, делиться опытом и получать полезные материалы.\n\n"
-    "Чат разделён на вкладки:\n"
-    "● 📌 <b>ВАЖНОЕ, АНОНСЫ</b> — объявления о прямых эфирах, расписание, новости.\n"
-    "● 🤝 <b>Прошу совета у коллег</b> — задавайте вопросы экспертам и другим участникам сообщества.\n"
-    "● 📚 <b>Эфиры и материалы</b> — записи трансляций, памятки, гайды и другие полезные материалы.\n\n"
-    "🔧 По техническим вопросам: @reclin2022"
-)
+# DEFAULT_WELCOME_TEXT теперь берется из настроек .env файла
 
-DEFAULT_GIFT_TEXT = (
-    "🎁 <b>Хотим сразу поделиться с тобой стартовым набором полезных материалов:</b>\n"
-    "📌 Памятка «под стекло» по артериальной гипертензии — <a href='https://disk.yandex.ru/d/aCHhf7g7i_KHgw'>Скачать</a>\n"
-    "📌 Памятки «под стекло» по диарее и запору — <a href='https://disk.yandex.ru/d/Qf_sd_zUepxUPw'>Скачать</a>\n"
-    "📌 Шаблоны осмотров при НАЖБП и гастрите — <a href='https://disk.yandex.ru/d/0cGXx48hKweI8A'>Скачать</a>\n"
-    "📌 Таблица с лекарственными препаратами по клинреку «Гастрит» — <a href='https://disk.yandex.ru/d/C4drU9y2DZEQuA'>Скачать</a>\n\n"
-    "💬 Больше полезных материалов тебя ждёт в нашем чате — оставайся с нами!"
-)
+# DEFAULT_GIFT_TEXT теперь берется из настроек .env файла
 
 
 async def copy_message_by_id(bot, chat_id: int, message_id: int, from_chat_id: int, reply_markup=None) -> bool:
@@ -65,8 +48,8 @@ async def send_welcome_message(bot, chat_id: int, reply_markup=None) -> bool:
             if success:
                 return True
         
-        # Если копирование не удалось, отправляем стандартное сообщение
-        await bot.send_message(chat_id, DEFAULT_WELCOME_TEXT, reply_markup=reply_markup, parse_mode="HTML")
+        # Если копирование не удалось, отправляем стандартное сообщение из настроек
+        await bot.send_message(chat_id, settings.default_welcome_message, reply_markup=reply_markup, parse_mode="HTML")
         return True
 
 
@@ -83,8 +66,8 @@ async def send_gift_message(bot, chat_id: int, reply_markup=None) -> bool:
             if success:
                 return True
         
-        # Если копирование не удалось или нет сохраненного сообщения - отправляем стандартное с кнопками
-        await bot.send_message(chat_id, DEFAULT_GIFT_TEXT, reply_markup=reply_markup, parse_mode="HTML")
+        # Если копирование не удалось или нет сохраненного сообщения - отправляем стандартное из настроек
+        await bot.send_message(chat_id, settings.default_gift_message, reply_markup=reply_markup, parse_mode="HTML")
         return True
 
 
