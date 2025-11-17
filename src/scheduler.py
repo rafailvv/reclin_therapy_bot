@@ -194,7 +194,7 @@ async def cleanup_unregistered(telegram_id: int):
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[[
                     InlineKeyboardButton(
-                        text="Заполнить специальность",
+                        text="Заполнить анкету",
                         web_app=WebAppInfo(
                             url=f"{settings.webapp_url}/?uid={telegram_id}"
                         )
@@ -204,9 +204,7 @@ async def cleanup_unregistered(telegram_id: int):
             await bot.send_message(
                 chat_id=telegram_id,
                 text=(
-                    "Коллега, просим тебя внести специальность — "
-                    "это нужно, чтобы мы с командой подбирали материалы, "
-                    "которые действительно будут полезны именно тебе."
+                    "Коллега, напоминаем тебе о заполнении анкеты для участия в чате!"
                 ),
                 reply_markup=kb
             )
