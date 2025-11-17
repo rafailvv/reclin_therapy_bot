@@ -14,37 +14,6 @@
       <h2>Регистрация в чате</h2>
       <form id="regForm">
         <input type="text" name="fio" placeholder="ФИО" required>
-        <select name="specialization" id="specialization" required>
-          <option value="">Выберите специализацию</option>
-          <!-- Список детских специальностей -->
-          <option>Аллергология и иммунология детская</option>
-          <option>Анестезиология-реаниматология детская</option>
-          <option>Детская гастроэнтерология</option>
-          <option>Детская гематология-онкология</option>
-          <option>Детская дерматовенерология</option>
-          <option>Детская инфекционная медицина</option>
-          <option>Детская кардиология</option>
-          <option>Детская нефрология</option>
-          <option>Детская неврология</option>
-          <option>Детская онкология</option>
-          <option>Детская оториноларингология</option>
-          <option>Детская офтальмология</option>
-          <option>Детская психиатрия</option>
-          <option>Детская пульмонология</option>
-          <option>Детская ревматология</option>
-          <option>Детская стоматология</option>
-          <option>Детская хирургия</option>
-          <option>Медицинская генетика</option>
-          <option>Неонатология</option>
-          <option>Общая врачебная практика (педиатрия)</option>
-          <option>Педиатрия</option>
-          <option>Подростковая медицина</option>
-          <option>Травматология-ортопедия детская</option>
-          <option>Ультразвуковая диагностика детская</option>
-          <option>Физиотерапия детская</option>
-          <option>Эндокринология детская</option>
-          <option>Другое</option>
-        </select>
 <!--        <input type="email" name="email" placeholder="E-mail" required>-->
 
         <div class="checkbox-group">
@@ -88,7 +57,6 @@
         telegram_id: tg.initDataUnsafe.user.id,
         username: tg.initDataUnsafe.user.username,
         fio: form.fio.value.trim(),
-        specialization: form.specialization.value.trim(),
         // email: form.email.value.trim()
       };
 

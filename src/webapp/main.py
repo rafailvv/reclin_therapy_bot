@@ -46,12 +46,12 @@ async def index(request: Request, uid: int = Depends(get_telegram_user_id)):
             select(User).where(User.telegram_id == uid)
         )
 
-    # Если пользователя нет или он не заполнил fio или specialization — показываем форму
-    if not user or user.fio is None or user.specialization is None:
+    # Если пользователя нет или он не заполнил fio — показываем форму
+    if not user or user.fio is None:
         logger.info(
             "User %s incomplete (%s); returning registration form",
             uid,
-            f"fio={user.fio!r}, specialization={user.specialization!r}" if user else "no user",
+            f"fio={user.fio!r}" if user else "no user",
         )
         return templates.TemplateResponse(
             "form.html",
@@ -86,14 +86,12 @@ async def register(request: Request):
         telegram_id      = tg_id,
         username         = data.get("username"),
         fio              = data.get("fio"),
-        specialization   = data.get("specialization"),
         email            = data.get("email"),
         invite_link      = invite,
     ).on_conflict_do_update(
         index_elements=[User.telegram_id],
         set_ = {
             "fio"            : data.get("fio"),
-            "specialization" : data.get("specialization"),
             "email"          : data.get("email"),
             "invite_link"    : invite,
         }

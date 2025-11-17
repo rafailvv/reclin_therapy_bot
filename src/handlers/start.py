@@ -1,16 +1,15 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import update, select
 from sqlalchemy.exc import IntegrityError
 from ..config import settings
 from ..services.invite import create_one_time_invite
 from ..db import async_session
 from ..models import User, BotMessage
-from ..scheduler import scheduler, cleanup_unregistered  # see next section
+from ..scheduler import scheduler  # see next section
 
 router = Router()
 
@@ -110,22 +109,12 @@ async def cmd_start(msg: Message):
                 telegram_id=msg.from_user.id,
                 username=msg.from_user.username,
                 invite_link=invite_link,
-                # fio/specialization/email — оставляем None
+                # fio/email — оставляем None
             )
             sess.add(new_user)
             await sess.commit()
 
-            # 3) Планируем проверку через 5 дней (для теста — 10 секунд)
-            run_date = datetime.utcnow() + timedelta(days=5)
-            scheduler.add_job(
-                func=cleanup_unregistered,
-                trigger=IntervalTrigger(days=5, start_date=run_date),
-                args=[msg.from_user.id],
-                id=f"remind_spec_{msg.from_user.id}",
-                replace_existing=True,
-            )
-
-            # 4) Формируем клавиатуру — для новых пользователей это прямая ссылка
+            # 3) Формируем клавиатуру — для новых пользователей это прямая ссылка
             button = InlineKeyboardButton(
                 text="Подключиться к чату",
                 url=invite_link
