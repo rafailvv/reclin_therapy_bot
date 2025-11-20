@@ -2,18 +2,16 @@
 import logging
 from datetime import timedelta, datetime
 
-from aiogram.types import InlineKeyboardMarkup, WebAppInfo, InlineKeyboardButton
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
-from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select, update
 from src.db import async_session
 from src.models import User
 from src.config import settings
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile
 
 
@@ -31,13 +29,15 @@ async def reschedule_reminders_on_start():
         for user in users:
             try:
                 run_date = user.registered_at + timedelta(days=5)
-                scheduler.add_job(
-                    func=cleanup_unregistered,
-                    trigger=IntervalTrigger(days=5, start_date=run_date),
-                    args=[user.telegram_id],
-                    id=f"remind_spec_{user.telegram_id}",
-                    replace_existing=True,
-                )
+                # Проверяем, не прошло ли уже 5 дней
+                if run_date > datetime.utcnow():
+                    scheduler.add_job(
+                        func=cleanup_unregistered,
+                        trigger=DateTrigger(run_date=run_date),
+                        args=[user.telegram_id],
+                        id=f"remind_spec_{user.telegram_id}",
+                        replace_existing=True,
+                    )
             except Exception as e:
                 logging.warning(f"Не удалось пересоздать задачу для {user.telegram_id}: {e}")
 
@@ -170,48 +170,14 @@ async def backup_reminder():
 
 async def cleanup_unregistered(telegram_id: int):
     """
-    Runs every 5 days starting 5 days after /start:
-     - if specialization still null → DM reminder
-     - otherwise → remove this job (no more reminders)
+    Удаляет задачу напоминания через 5 дней после /start.
+    Напоминания не отправляются.
     """
-    async with async_session() as sess:
-        user = await sess.scalar(
-            select(User).where(User.telegram_id == telegram_id)
-        )
-        if not user:
-            return
-
-        if user.specialization:
-            try:
-                scheduler.remove_job(f"remind_spec_{telegram_id}")
-            except JobLookupError:
-                pass
-            return
-
-        # Otherwise, send the *reminder* message
-        bot = Bot(token=settings.bot_token)
-        try:
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="Заполнить анкету",
-                        web_app=WebAppInfo(
-                            url=f"{settings.webapp_url}/?uid={telegram_id}"
-                        )
-                    )
-                ]]
-            )
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=(
-                    "Коллега, напоминаем тебе о заполнении анкеты для участия в чате!"
-                ),
-                reply_markup=kb
-            )
-        except TelegramBadRequest as e:
-            logging.warning(f"Failed to send reminder to {telegram_id}: {e}")
-        finally:
-            await bot.session.close()
+    # Просто удаляем задачу, напоминания не отправляем
+    try:
+        scheduler.remove_job(f"remind_spec_{telegram_id}")
+    except JobLookupError:
+        pass
 
 
 def setup_scheduler(bot: Bot):
