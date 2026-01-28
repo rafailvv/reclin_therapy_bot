@@ -20,12 +20,7 @@ class Settings(BaseSettings):
     postgres_user:    str = "postgres"
     postgres_password: str = "password"
     postgres_port:    int = 5435
-
-    @computed_field
-    @property
-    def admin_ids(self) -> List[int]:
-        admin_ids_env = os.getenv('ADMIN_IDS', '429272623')
-        return [int(x.strip()) for x in admin_ids_env.split(',') if x.strip()]
+    admin_ids:        List[int] = [429272623]
 
     @computed_field
     @property
