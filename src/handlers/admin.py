@@ -146,8 +146,10 @@ async def cmd_backup(msg: Message):
             if result.returncode == 0:
                 # Отправляем файл бэкапа
                 await msg.answer_document(
-                    FSInputFile(backup_filename),
-                    filename=backup_filename,
+                    FSInputFile(
+                        backup_filename,
+                        filename=os.path.basename(backup_filename),
+                    ),
                     caption=f"✅ Бэкап базы данных создан: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
                 )
                 logger.info("Database backup created successfully by admin %s", msg.from_user.id)
@@ -425,8 +427,7 @@ async def cmd_export(msg: Message):
     with tempfile.NamedTemporaryFile("wb", suffix=".xlsx", delete=False) as fp:
         df.to_excel(fp.name, index=False)
         await msg.answer_document(
-            FSInputFile(fp.name),
-            filename=filename,
+            FSInputFile(fp.name, filename=filename),
             caption=f"Отчёт сформирован: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC",
         )
     logger.info("User export sent to admin %s", msg.from_user.id)
