@@ -310,8 +310,7 @@ async def cmd_export(msg: Message):
     with tempfile.NamedTemporaryFile("wb", suffix=".xlsx", delete=False) as fp:
         df.to_excel(fp.name, index=False)
         await msg.answer_document(
-            FSInputFile(fp.name),
-            filename=filename,
+            FSInputFile(fp.name, filename=filename),
             caption=f"Отчёт сформирован: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC",
         )
     logger.info("User export sent to admin %s", msg.from_user.id)
