@@ -141,8 +141,10 @@ async def backup_reminder():
                 # Отправляем файл бэкапа админу
                 await bot.send_document(
                     chat_id=429272623,  # ID админа
-                    document=FSInputFile(backup_filename),
-                    filename=backup_filename,
+                    document=FSInputFile(
+                        backup_filename,
+                        filename=os.path.basename(backup_filename),
+                    ),
                     caption=f"🔄 Автоматический бэкап базы данных: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
                 )
                 logging.info("Automatic database backup created and sent successfully")
