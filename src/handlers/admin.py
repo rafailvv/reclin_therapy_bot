@@ -79,7 +79,6 @@ async def cmd_backup(msg: Message):
         # Команда для создания бэкапа PostgreSQL
         # Извлекаем параметры подключения из DATABASE_URL
         db_url = str(settings.database_url)
-        logger.info(f"Database URL: {db_url}")
         
         # Парсим URL для получения параметров
         if db_url.startswith('postgresql://') or db_url.startswith('postgresql+asyncpg://'):
