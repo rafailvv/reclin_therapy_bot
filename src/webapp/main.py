@@ -7,6 +7,7 @@ from sqlalchemy import select
 from aiogram import Bot
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from .auth import get_telegram_user
 from ..config import settings
 from ..db import async_session
 from ..models import User
@@ -27,18 +28,19 @@ templates = Jinja2Templates(directory="src/webapp/templates")
 bot = Bot(token=settings.bot_token)
 
 
-def get_telegram_user_id(request: Request) -> int:
-    logger.debug("Extracting Telegram user id from request query params")
-    uid = request.query_params.get("uid")
-    if not uid:
-        logger.warning("No uid provided in request")
-        raise HTTPException(400, "no uid")
-    logger.info("Received request from Telegram user %s", uid)
-    return int(uid)
+@app.middleware("http")
+async def private_responses(request: Request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, uid: int = Depends(get_telegram_user_id)):
+async def index(request: Request):
+    if "X-Telegram-Init-Data" not in request.headers:
+        return templates.TemplateResponse("bootstrap.html", {"request": request})
+    uid = get_telegram_user(request)["id"]
     logger.info("Handling index GET for user %s", uid)
 
     async with async_session() as sess:
@@ -70,11 +72,16 @@ async def index(request: Request, uid: int = Depends(get_telegram_user_id)):
 
 
 @app.post("/register")
-async def register(request: Request):
-    data = await request.json()
-    tg_id = int(data.get("telegram_id", 0))
-    if tg_id == 0:
-        raise HTTPException(400, "telegram_id is required")
+async def register(request: Request, telegram_user: dict = Depends(get_telegram_user)):
+    try:
+        data = await request.json()
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid registration data") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Invalid registration data")
+    tg_id = telegram_user["id"]
+    if str(data.get("telegram_id", tg_id)) != str(tg_id):
+        raise HTTPException(403, "Telegram user mismatch")
 
     await bot.unban_chat_member(chat_id=settings.chat_id, user_id=tg_id)
 
@@ -84,7 +91,7 @@ async def register(request: Request):
     # 2) UPSERT: вставляем или обновляем все поля, включая новую invite_link
     stmt = pg_insert(User).values(
         telegram_id      = tg_id,
-        username         = data.get("username"),
+        username         = telegram_user.get("username"),
         fio              = data.get("fio"),
         email            = data.get("email"),
         invite_link      = invite,
