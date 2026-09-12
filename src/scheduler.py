@@ -12,7 +12,7 @@ from sqlalchemy import select, update
 from src.db import async_session
 from src.models import User
 from src.config import settings
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 
 scheduler = AsyncIOScheduler(jobstores={
@@ -82,6 +82,9 @@ async def cleanup_unregistered(telegram_id: int):
                 ),
                 reply_markup=kb
             )
+        except TelegramForbiddenError:
+            # Retain the reminder cadence: the user may unblock the bot later.
+            logging.warning("Reminder recipient %s is unavailable", telegram_id)
         except TelegramBadRequest as e:
             logging.warning(f"Failed to send reminder to {telegram_id}: {e}")
         finally:

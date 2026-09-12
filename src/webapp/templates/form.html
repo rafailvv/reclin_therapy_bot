@@ -140,6 +140,7 @@
       e.preventDefault();
       next.disabled = true;
 
+      try {
       const payload = {
         telegram_id: tg.initDataUnsafe.user.id,
         username: tg.initDataUnsafe.user.username,
@@ -150,12 +151,21 @@
 
       const r = await fetch('/register', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData},
         body: JSON.stringify(payload)
       });
       const res = await r.json();
+      if (!r.ok || !res.link) {
+        throw new Error(r.status === 401
+          ? 'Откройте форму заново через кнопку в Telegram.'
+          : 'Не удалось сохранить данные. Попробуйте ещё раз.');
+      }
       tg.openTelegramLink(res.link);
       tg.close();
+      } catch (error) {
+        window.alert(error.message);
+        validate();
+      }
     });
   </script>
 </body>
