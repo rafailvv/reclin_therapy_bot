@@ -72,7 +72,6 @@ async def backup_reminder():
         
         # Команда для создания бэкапа PostgreSQL
         db_url = str(settings.database_url)
-        logging.info(f"Database URL: {db_url}")
         
         # Парсим URL для получения параметров
         if db_url.startswith('postgresql://') or db_url.startswith('postgresql+asyncpg://'):
