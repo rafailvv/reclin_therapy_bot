@@ -47,7 +47,11 @@
     }
 
     form.addEventListener('input', validate);
-    boxes.forEach(b => b.addEventListener('change', validate));
+    // Native selects and autofill may emit change without input in mobile WebViews.
+    form.addEventListener('change', validate);
+    window.addEventListener('pageshow', validate);
+    window.addEventListener('focus', validate);
+    validate();
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
