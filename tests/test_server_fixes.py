@@ -107,7 +107,7 @@ def test_registration_preserves_fields_and_operation_order(state):
     r=state.client.post('/register',headers=headers(),json={'telegram_id':123,'username':'forged','fio':'Doctor','specialization':'Therapy'})
     assert r.status_code==200 and r.json()=={'link':'https://t.me/+test-invite'}
     assert events==['unban','invite','execute','commit']
-    state.bot.unban_chat_member.assert_awaited_once_with(chat_id=-100123,user_id=123)
+    state.bot.unban_chat_member.assert_awaited_once_with(chat_id=-100123,user_id=123,only_if_banned=True)
     stmt=state.session.execute.call_args.args[0]
     params=stmt.compile().params
     assert params['telegram_id']==123 and params['username']=='real_user' and params['fio']=='Doctor'
@@ -157,3 +157,29 @@ def test_completed_user_removes_reminder(state,monkeypatch):
     monkeypatch.setattr(jobs.scheduler,'remove_job',remove)
     asyncio.run(jobs.cleanup_unregistered(123))
     remove.assert_called_once_with('remind_spec_123')
+
+
+def test_owner_registration_never_attempts_removal(state):
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import UnbanChatMember
+    async def owner_unban(**kwargs):
+        if not kwargs.get('only_if_banned'):
+            raise TelegramBadRequest(method=UnbanChatMember(chat_id=-100123, user_id=123), message="can't remove chat owner")
+        return True
+    state.bot.unban_chat_member.side_effect = owner_unban
+    response = state.client.post('/register', headers=headers(), json={'fio': 'Doctor', 'specialization': 'Therapy'})
+    assert response.status_code == 200
+    state.session.commit.assert_awaited_once()
+
+
+@pytest.mark.parametrize('stage', ['unban', 'invite'])
+def test_telegram_failure_is_json_without_database_write(state, stage):
+    from aiogram.exceptions import TelegramBadRequest
+    from aiogram.methods import UnbanChatMember
+    error = TelegramBadRequest(method=UnbanChatMember(chat_id=-100123, user_id=123), message='not enough rights')
+    target = state.bot.unban_chat_member if stage == 'unban' else state.invite
+    target.side_effect = error
+    response = state.client.post('/register', headers=headers(), json={'fio': 'Doctor', 'specialization': 'Therapy'})
+    assert response.status_code == 503
+    assert response.json()['detail']
+    state.factory.assert_not_called()
