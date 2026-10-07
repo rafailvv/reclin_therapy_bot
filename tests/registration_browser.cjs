@@ -22,11 +22,12 @@ const { chromium } = require('playwright');
     await page.route('**/*', async route => {
       if (route.request().method() === 'POST') {
         requests.push({ url: new URL(route.request().url()).pathname, body: route.request().postDataJSON(), headers: route.request().headers() });
-        return route.fulfill({ status: fail ? 500 : 200, contentType: 'application/json', body: JSON.stringify(fail ? {} : { link: 'https://t.me/+test' }) });
+        return route.fulfill({ status: fail ? 500 : 200, contentType: fail ? 'text/plain' : 'application/json', body: fail ? 'Internal Server Error' : JSON.stringify({ link: 'https://t.me/+test' }) });
       }
       return route.fulfill({ contentType: route.request().url().endsWith('/') ? 'text/html' : 'text/javascript', body: route.request().url().endsWith('/') ? html : '' });
     });
-    page.on('dialog', dialog => dialog.accept());
+    const alerts = [];
+    page.on('dialog', dialog => { alerts.push(dialog.message()); dialog.accept(); });
     await page.goto('https://example.test/');
     const button = page.locator('#nextBtn');
     assert(await button.isDisabled());
@@ -51,6 +52,8 @@ const { chromium } = require('playwright');
     assert.equal(await button.isDisabled(), false);
     await button.click();
     await page.waitForFunction(() => !document.getElementById('nextBtn').disabled);
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0], 'Не удалось сохранить данные. Попробуйте ещё раз.');
     fail = false;
     await button.click();
     await page.waitForFunction(() => window.openedLink === 'https://t.me/+test');
