@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .auth import get_telegram_user
@@ -83,10 +84,17 @@ async def register(request: Request, telegram_user: dict = Depends(get_telegram_
     if str(data.get("telegram_id", tg_id)) != str(tg_id):
         raise HTTPException(403, "Telegram user mismatch")
 
-    await bot.unban_chat_member(chat_id=settings.chat_id, user_id=tg_id)
-
-    # 1) Создаём новую одноразовую ссылку
-    invite = await create_one_time_invite(bot)
+    try:
+        # Do not remove existing members (including the owner) during registration.
+        await bot.unban_chat_member(
+            chat_id=settings.chat_id, user_id=tg_id, only_if_banned=True
+        )
+        invite = await create_one_time_invite(bot)
+    except TelegramAPIError as exc:
+        logger.exception("Telegram registration failed for user %s", tg_id)
+        raise HTTPException(
+            503, "Не удалось получить доступ к чату. Попробуйте ещё раз позже."
+        ) from exc
 
     # 2) UPSERT: вставляем или обновляем все поля, включая новую invite_link
     stmt = pg_insert(User).values(
